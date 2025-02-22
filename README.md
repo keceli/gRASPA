@@ -1,5 +1,5 @@
 # gRASPA
-gRASPA (pronounced “gee raspa”) is a GPU-accelerated Monte Carlo simulation software built for molecular adsorption in nanoporous materials, such as zeolites and metal-organic frameworks (MOFs). 
+gRASPA (pronounced "gee raspa") is a GPU-accelerated Monte Carlo simulation software built for molecular adsorption in nanoporous materials, such as zeolites and metal-organic frameworks (MOFs). 
 
 <div align="center">
   
@@ -59,6 +59,43 @@ To install gRASPA on NERSC (DOE) and QUEST (Northwestern) clusters, check out [C
 
 ### Installation on local machines
 A detailed installation note for gRASPA on CentOS/Ubuntu 24.04 is documented in the manual [here](https://zhaoli2042.github.io/gRASPA-mkdoc/Installation.html)
+
+### Building from source
+gRASPA uses CMake as its build system. To build the project:
+
+```bash
+# Create a build directory
+mkdir build && cd build
+
+# Configure the project
+cmake ..
+
+# Build (add -j 8 for parallel build)
+cmake --build .
+
+# Install (optional)
+cmake --install .
+```
+
+#### Build Requirements
+- CMake 3.15 or higher
+- C++17 compliant compiler
+- CUDA Toolkit
+- OpenMP
+
+#### Build Options
+The following CMake options can be configured:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `CMAKE_BUILD_TYPE` | Build type (Release/Debug) | Release |
+| `CMAKE_INSTALL_PREFIX` | Installation directory | /usr/local |
+| `BUILD_TESTING` | Build tests | OFF |
+
+Example with options:
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+```
 
 ### Compatible GPUs
 * For NVIDIA GPUs, gRASPA code has been tested on the following NVIDIA GPUs:

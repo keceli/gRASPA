@@ -10,7 +10,7 @@ inline void checkCUDAErrorEwald(const char *msg)
     }
 }
 /*
-static inline void Setup_threadblock_EW(size_t arraysize, size_t& Nblock, size_t& Nthread)
+static inline void Setup_threadblock_EW(size_t arraysize, size_t *Nblock, size_t *Nthread)
 {
   size_t value = arraysize;
   if(value >= 128) value = 128;
@@ -102,71 +102,46 @@ __device__ void Initialize_Vectors_thread(Complex* eik, size_t numberOfAtoms, in
     eik[i + k * numberOfAtoms] = multiply(eik[i + (k - 1) * numberOfAtoms], eik[i + 1 * numberOfAtoms]);
   }
 }
-//Copy Old positions and new positions together into Old//
-//including double3* temp, for reinsertion//
-__device__ void Initialize_Copy_Positions_Together(Atoms*& d_a, Atoms& New, Atoms& Old, double3* temp, size_t Oldsize, size_t Newsize, size_t SelectedComponent, size_t Location, size_t chainsize, int MoveType)
-{
-  size_t ij = blockIdx.x * blockDim.x + threadIdx.x;
-  if(MoveType == TRANSLATION || MoveType == ROTATION || MoveType == SPECIAL_ROTATION || MoveType == SINGLE_INSERTION || MoveType == SINGLE_DELETION) // Translation/Rotation/single_insertion/single_deletion //
-  {
-    //For Translation/Rotation, the Old positions are already in the Old struct, just need to put the New positions into Old, after the Old positions//
-    if(ij >= Oldsize)
-    {
-      Old.pos[ij]           = New.pos[ij - Oldsize];
-      Old.scale[ij]         = New.scale[ij - Oldsize];
-      Old.charge[ij]        = New.charge[ij - Oldsize];
-      Old.scaleCoul[ij]     = New.scaleCoul[ij - Oldsize];
-    }
-  }
-  else if(MoveType == INSERTION || MoveType == CBCF_INSERTION) // Insertion & Fractional Insertion //
-  {
-    //Put the trial orientations in New to Old, right after the first bead position//
-    if(ij < chainsize)
-    {
-      Old.pos[ij + 1]       = New.pos[Location * chainsize + ij];
-      Old.scale[ij + 1]     = New.scale[Location * chainsize + ij];
-      Old.charge[ij + 1]    = New.charge[Location * chainsize + ij];
-      Old.scaleCoul[ij + 1] = New.scaleCoul[Location * chainsize + ij];
-    }
-  }
-  else if(MoveType == DELETION || MoveType == CBCF_DELETION) // Deletion //
-  {
-    if(ij < Oldsize)
-    {
-      // For deletion, Location = UpdateLocation, see Deletion Move //
-      Old.pos[ij]           = d_a[SelectedComponent].pos[Location + ij];
-      Old.scale[ij]         = d_a[SelectedComponent].scale[Location + ij];
-      Old.charge[ij]        = d_a[SelectedComponent].charge[Location + ij];
-      Old.scaleCoul[ij]     = d_a[SelectedComponent].scaleCoul[Location + ij];
-    }
-  }
-  else if(MoveType == REINSERTION)
-  {
-    if(ij < Oldsize)
-    { 
-      Old.pos[ij]       = d_a[SelectedComponent].pos[Location + ij];
-      Old.scale[ij]     = d_a[SelectedComponent].scale[Location + ij];
-      Old.charge[ij]    = d_a[SelectedComponent].charge[Location + ij];
-      Old.scaleCoul[ij] = d_a[SelectedComponent].scaleCoul[Location + ij];
-    }
-    else
-    {
-      Old.pos[ij]       = temp[ij - Oldsize];
-      Old.scale[ij]     = d_a[SelectedComponent].scale[Location + ij - Oldsize];
-      Old.charge[ij]    = d_a[SelectedComponent].charge[Location + ij - Oldsize];
-      Old.scaleCoul[ij] = d_a[SelectedComponent].scaleCoul[Location + ij - Oldsize];
-    }
-  }
-}
 
-__global__ void Initialize_WaveVector_General(Boxsize Box, int3 kmax, Atoms* d_a, Atoms New, Atoms Old, double3* temp, size_t Oldsize, size_t Newsize, size_t SelectedComponent, size_t Location, size_t chainsize, size_t numberOfAtoms, int MoveType)
+__global__ void Initialize_WaveVector_General(Boxsize Box, int3 kmax, Atoms* d_a, Atoms New, Atoms Old, size_t Oldsize, size_t Newsize, size_t SelectedComponent, size_t Location, size_t chainsize, size_t numberOfAtoms, int MoveType)
 {
   //Zhao's note: need to think about changing this boolean to switch//
   size_t ij = blockIdx.x * blockDim.x + threadIdx.x;
-  
   if(ij < (Newsize + Oldsize))
   {
-    Initialize_Copy_Positions_Together(d_a, New, Old, temp, Oldsize, Newsize, SelectedComponent, Location, chainsize, MoveType);
+    if(MoveType == TRANSLATION || MoveType == ROTATION || MoveType == SPECIAL_ROTATION || MoveType == SINGLE_INSERTION || MoveType == SINGLE_DELETION) // Translation/Rotation/single_insertion/single_deletion //
+    {
+      //For Translation/Rotation, the Old positions are already in the Old struct, just need to put the New positions into Old, after the Old positions//
+      if(ij >= Oldsize)
+      {
+        Old.pos[ij]           = New.pos[ij - Oldsize];
+        Old.scale[ij]         = New.scale[ij - Oldsize];
+        Old.charge[ij]        = New.charge[ij - Oldsize];
+        Old.scaleCoul[ij]     = New.scaleCoul[ij - Oldsize];
+      }
+    }
+    else if(MoveType == INSERTION || MoveType == CBCF_INSERTION) // Insertion & Fractional Insertion //
+    {
+      //Put the trial orientations in New to Old, right after the first bead position//
+      if(ij < chainsize)
+      {
+        Old.pos[ij + 1]       = New.pos[Location * chainsize + ij];
+        Old.scale[ij + 1]     = New.scale[Location * chainsize + ij];
+        Old.charge[ij + 1]    = New.charge[Location * chainsize + ij];
+        Old.scaleCoul[ij + 1] = New.scaleCoul[Location * chainsize + ij];
+      }
+    }
+    else if(MoveType == DELETION || MoveType == CBCF_DELETION) // Deletion //
+    {
+      if(ij < Oldsize)
+      {
+        // For deletion, Location = UpdateLocation, see Deletion Move //
+        Old.pos[ij]           = d_a[SelectedComponent].pos[Location + ij];
+        Old.scale[ij]         = d_a[SelectedComponent].scale[Location + ij];
+        Old.charge[ij]        = d_a[SelectedComponent].charge[Location + ij];
+        Old.scaleCoul[ij]     = d_a[SelectedComponent].scaleCoul[Location + ij];
+      }
+    }
     //Old+New//
     Complex tempcomplex; tempcomplex.real = 1.0; tempcomplex.imag = 0.0;
     tempcomplex.real = 1.0; tempcomplex.imag = 0.0;
@@ -249,6 +224,8 @@ __global__ void Initialize_WaveVector_IdentitySwap(Boxsize Box, int3 kmax, doubl
       Old.charge[ij]    = d_a[NEWComponent].charge[ij - Oldsize];
       Old.scaleCoul[ij] = 1.0;
     }
+    
+    
     //Old+New//
     Complex tempcomplex; tempcomplex.real = 1.0; tempcomplex.imag = 0.0;
     tempcomplex.real = 1.0; tempcomplex.imag = 0.0;
@@ -399,7 +376,7 @@ __global__ void Fourier_Ewald_Diff(Boxsize Box, Complex* SameTypeEik, Complex* C
 void Skip_Ewald(Boxsize& Box)
 {
   size_t numberOfStructureFactors = (Box.kmax.x + 1) * (2 * Box.kmax.y + 1) * (2 * Box.kmax.z + 1);
-  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(numberOfStructureFactors, Nblock, Nthread);
+  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(numberOfStructureFactors, &Nblock, &Nthread);
   JustStore_StructureFactor_Ewald<<<Nblock, Nthread>>>(Box, numberOfStructureFactors);
 }
 
@@ -435,17 +412,10 @@ void Update_Vector_Ewald(Boxsize& Box, bool CPU, Components& SystemComponents, s
 ////////////////////////////////////////////////
 // Main Ewald Functions (Fourier + Exclusion) //
 ////////////////////////////////////////////////
-double2 GPU_EwaldDifference_General(Simulations& Sim, ForceField& FF, Components& SystemComponents, size_t SelectedComponent, int MoveType, size_t Location, double2 Scale)
+double2 GPU_EwaldDifference_General(Boxsize& Box, Atoms*& d_a, Atoms& New, Atoms& Old, ForceField& FF, double* Blocksum, Components& SystemComponents, size_t SelectedComponent, int MoveType, size_t Location, double2 Scale)
 {
   if(FF.noCharges && !SystemComponents.hasPartialCharge[SelectedComponent]) return {0.0, 0.0};
   //cudaDeviceSynchronize();
-
-  Boxsize& Box = Sim.Box;
-  Atoms*& d_a  = Sim.d_a;
-  Atoms& New   = Sim.New;
-  Atoms& Old   = Sim.Old;
-  double* Blocksum = Sim.Blocksum;
-
   double start = omp_get_wtime();
   double alpha = Box.Alpha; double alpha_squared = alpha * alpha;
   double prefactor = Box.Prefactor * (2.0 * M_PI / Box.Volume);
@@ -490,10 +460,8 @@ double2 GPU_EwaldDifference_General(Simulations& Sim, ForceField& FF, Components
     }
     case REINSERTION: // Reinsertion //
     {
-       Newsize   = SystemComponents.Moleculesize[SelectedComponent];
-       Oldsize   = SystemComponents.Moleculesize[SelectedComponent];
-       chainsize = SystemComponents.Moleculesize[SelectedComponent] - 1;
-       break;
+      throw std::runtime_error("Use the Special Function for Reinsertion");
+      //break;
     }
     case IDENTITY_SWAP:
     {
@@ -525,20 +493,20 @@ double2 GPU_EwaldDifference_General(Simulations& Sim, ForceField& FF, Components
   }
   size_t numberOfAtoms = Oldsize + Newsize;
 
-  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(Oldsize + Newsize, Nblock, Nthread);
-  Initialize_WaveVector_General<<<Nblock,Nthread>>>(Box, Box.kmax, d_a, New, Old, SystemComponents.tempMolStorage, Oldsize, Newsize, SelectedComponent, Location, chainsize, numberOfAtoms, MoveType); checkCUDAErrorEwald("error Initializing Ewald Vectors");
+  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(Oldsize + Newsize, &Nblock, &Nthread);
+  Initialize_WaveVector_General<<<Nblock,Nthread>>>(Box, Box.kmax, d_a, New, Old, Oldsize, Newsize, SelectedComponent, Location, chainsize, numberOfAtoms, MoveType); checkCUDAErrorEwald("error Initializing Ewald Vectors");
 
   //Fourier Loop//
   size_t numberOfStructureFactors = (Box.kmax.x + 1) * (2 * Box.kmax.y + 1) * (2 * Box.kmax.z + 1);
-  Nblock = 0; Nthread = 0; Setup_threadblock(numberOfStructureFactors, Nblock, Nthread);
+  Nblock = 0; Nthread = 0; Setup_threadblock(numberOfStructureFactors, &Nblock, &Nthread);
 
   //If we separate Host-Guest from Guest-Guest, we can double the Nblock, so the first half does Guest-Guest, and the second half does Host-Guest//
   Fourier_Ewald_Diff<<<Nblock * 2, Nthread, Nthread * sizeof(double)>>>(Box, SameType, CrossType, Old, alpha_squared, prefactor, Box.kmax, Oldsize, Newsize, Blocksum, UseTempVector, Nblock);
   
-  double SameSum = 0.0; double CrossSum = 0.0;
-  cudaMemcpy(SystemComponents.host_array, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost); //HG + GG Energies//
-  for(size_t i = 0; i < Nblock; i++){SameSum += SystemComponents.host_array[i];}
-  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += SystemComponents.host_array[i];}
+  double sum[Nblock * 2]; double SameSum = 0.0; double CrossSum = 0.0;
+  cudaMemcpy(sum, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost); //HG + GG Energies//
+  for(size_t i = 0; i < Nblock; i++){SameSum += sum[i];}
+  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += sum[i];}
   //Zhao's note: when adding fractional molecules, this might not be correct//
   double deltaExclusion = 0.0;
   
@@ -577,6 +545,38 @@ double2 GPU_EwaldDifference_General(Simulations& Sim, ForceField& FF, Components
   return {SameSum, 2.0 * CrossSum};
 }
 
+//Zhao's note: THIS IS A SPECIAL FUNCTION JUST FOR REINSERTION//
+double2 GPU_EwaldDifference_Reinsertion(Boxsize& Box, Atoms*& d_a, Atoms& Old, double3* temp, ForceField& FF, double* Blocksum, Components& SystemComponents, size_t SelectedComponent, size_t UpdateLocation)
+{
+  if(FF.noCharges && !SystemComponents.hasPartialCharge[SelectedComponent]) return {0.0, 0.0};
+  double alpha = Box.Alpha; double alpha_squared = alpha * alpha;
+  double prefactor = Box.Prefactor * (2.0 * M_PI / Box.Volume);
+
+  size_t numberOfAtoms = SystemComponents.Moleculesize[SelectedComponent];
+  size_t Oldsize = 0; size_t Newsize = numberOfAtoms;
+  //Zhao's note: translation/rotation/reinsertion involves new + old states. Insertion/Deletion only has the new state.
+  Oldsize         = SystemComponents.Moleculesize[SelectedComponent];
+  numberOfAtoms  += Oldsize;
+
+  Complex* SameType = Box.AdsorbateEik; Complex* CrossType = Box.FrameworkEik;
+
+  // Construct exp(ik.r) for atoms and k-vectors kx, ky, kz = 0, 1 explicitly
+  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(Oldsize + Newsize, &Nblock, &Nthread);
+  Initialize_WaveVector_Reinsertion<<<Nblock,Nthread>>>(Box, Box.kmax, temp, d_a, Old, Oldsize, Newsize, UpdateLocation, numberOfAtoms, SelectedComponent);
+
+  //Fourier Loop//
+  size_t numberOfStructureFactors = (Box.kmax.x + 1) * (2 * Box.kmax.y + 1) * (2 * Box.kmax.z + 1);
+  Nblock = 0; Nthread = 0; Setup_threadblock(numberOfStructureFactors, &Nblock, &Nthread);
+  Fourier_Ewald_Diff<<<Nblock * 2, Nthread, Nthread * sizeof(double)>>>(Box, SameType, CrossType, Old, alpha_squared, prefactor, Box.kmax, Oldsize, Newsize, Blocksum, false, Nblock);
+  double sum[Nblock * 2]; double SameSum = 0.0;  double CrossSum = 0.0;
+  cudaMemcpy(sum, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost);
+
+  for(size_t i = 0; i < Nblock; i++){SameSum += sum[i];}
+  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += sum[i];}
+
+  return {SameSum, 2.0 * CrossSum};
+}
+
 double2 GPU_EwaldDifference_IdentitySwap(Boxsize& Box, Atoms*& d_a, Atoms& Old, double3* temp, ForceField& FF, double* Blocksum, Components& SystemComponents, size_t OLDComponent, size_t NEWComponent, size_t UpdateLocation)
 {
   if(FF.noCharges && !SystemComponents.hasPartialCharge[NEWComponent] && !SystemComponents.hasPartialCharge[OLDComponent]) return {0.0, 0.0};
@@ -598,13 +598,13 @@ double2 GPU_EwaldDifference_IdentitySwap(Boxsize& Box, Atoms*& d_a, Atoms& Old, 
   if(numberOfAtoms == 0) return {0.0, 0.0};
 
   // Construct exp(ik.r) for atoms and k-vectors kx, ky, kz = 0, 1 explicitly
-  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(Oldsize + Newsize, Nblock, Nthread);
+  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(Oldsize + Newsize, &Nblock, &Nthread);
   Initialize_WaveVector_IdentitySwap<<<Nblock,Nthread>>>(Box, Box.kmax, temp, d_a, Old, Oldsize, Newsize, UpdateLocation, numberOfAtoms, OLDComponent, NEWComponent); checkCUDAErrorEwald("Error in Initialization of WaveVector for Identity Swap\n");
 
   Complex* SameType = Box.AdsorbateEik; Complex* CrossType = Box.FrameworkEik;
   //Fourier Loop//
   size_t numberOfStructureFactors = (Box.kmax.x + 1) * (2 * Box.kmax.y + 1) * (2 * Box.kmax.z + 1);
-  Nblock = 0; Nthread = 0; Setup_threadblock(numberOfStructureFactors, Nblock, Nthread);
+  Nblock = 0; Nthread = 0; Setup_threadblock(numberOfStructureFactors, &Nblock, &Nthread);
   Fourier_Ewald_Diff<<<Nblock * 2, Nthread, Nthread * sizeof(double)>>>(Box, SameType, CrossType, Old, alpha_squared, prefactor, Box.kmax, Oldsize, Newsize, Blocksum, false, Nblock);
   double sum[Nblock * 2]; double SameSum = 0.0;  double CrossSum = 0.0;
   cudaMemcpy(sum, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost);
@@ -764,7 +764,7 @@ double2 GPU_EwaldDifference_LambdaChange(Boxsize& Box, Atoms*& d_a, Atoms& Old, 
 
   //Fourier Loop//
   size_t numberOfStructureFactors = (Box.kmax.x + 1) * (2 * Box.kmax.y + 1) * (2 * Box.kmax.z + 1);
-  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(numberOfStructureFactors, Nblock, Nthread);
+  size_t Nblock = 0; size_t Nthread = 0; Setup_threadblock(numberOfStructureFactors, &Nblock, &Nthread);
 
   Complex* SameType = Box.AdsorbateEik;
   Complex* CrossType= Box.FrameworkEik;
@@ -1297,7 +1297,7 @@ MoveEnergy Ewald_TotalEnergy(Simulations& Sim, Components& SystemComponents, boo
     int2 residueAtoms   = {NHostAtom > 0 ? NHostAtom % NHostGuestthread.x : 0, NGuestAtom > 0 ? NGuestAtom % NHostGuestthread.y : 0};
 
     //Setup eikx, eiky, and eikz//
-    Setup_threadblock(NTotalAtom, Nblock, Nthread);
+    Setup_threadblock(NTotalAtom, &Nblock, &Nthread);
 
     Complex* eikx; cudaMalloc(&eikx, NTotalAtom * (Box.kmax.x + 1) * sizeof(Complex));
     Complex* eiky; cudaMalloc(&eiky, NTotalAtom * (Box.kmax.y + 1) * sizeof(Complex));
@@ -1397,7 +1397,7 @@ MoveEnergy Ewald_TotalEnergy(Simulations& Sim, Components& SystemComponents, boo
       size_t IntraInteractions = FrameworkCompZeroAtoms * (FrameworkCompZeroAtoms - 1) / 2;
       size_t InteractionPerThread = 100;
       size_t TotalThreadsNeeded = IntraInteractions / InteractionPerThread + (IntraInteractions % InteractionPerThread == 0 ? 0 : 1);
-      Setup_threadblock(TotalThreadsNeeded, Exclusion_Nblock, Exclusion_Nthread);
+      Setup_threadblock(TotalThreadsNeeded, &Exclusion_Nblock, &Exclusion_Nthread);
       
       //DEBUG//printf("Component %zu, Atoms: %zu, IntraInteractions: %zu, totalThreads: %zu, Nblock: %zu, Nthread: %zu\n", 0, FrameworkCompZeroAtoms, IntraInteractions, TotalThreadsNeeded, Exclusion_Nblock, Exclusion_Nthread);
 
@@ -1415,7 +1415,7 @@ MoveEnergy Ewald_TotalEnergy(Simulations& Sim, Components& SystemComponents, boo
     for(size_t i = 1; i < SystemComponents.NComponents.x; i++)
     {
       if(SystemComponents.NumberOfMolecule_for_Component[i] == 0) continue;
-      Setup_threadblock(SystemComponents.NumberOfMolecule_for_Component[i], Exclusion_Nblock, Exclusion_Nthread);
+      Setup_threadblock(SystemComponents.NumberOfMolecule_for_Component[i], &Exclusion_Nblock, &Exclusion_Nthread);
       //printf("Component %zu, Nblock: %zu, Nthread: %zu\n", i, Exclusion_Nblock, Exclusion_Nthread);
       Calculate_Intra_Self_Exclusion<<<Exclusion_Nblock, Exclusion_Nthread, Exclusion_Nthread * sizeof(double)>>>(Box, d_a, Sim.Blocksum, i); 
       checkCUDAErrorEwald("error Calculating Intra Self Exclusion (ADSORBATE) for Ewald Summation for Total Ewald summation!!!");

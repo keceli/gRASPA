@@ -226,15 +226,12 @@ __host__ MoveEnergy sqrt_MoveEnergy(MoveEnergy A)
   X.HHVDW    = sqrt(A.HHVDW);
   X.HGVDW    = sqrt(A.HGVDW);    
   X.GGVDW    = sqrt(A.GGVDW);  
-
   X.HHReal   = sqrt(A.HHReal);  
   X.HGReal   = sqrt(A.HGReal);   
   X.GGReal   = sqrt(A.GGReal);   
-
   X.HHEwaldE = sqrt(A.HHEwaldE); 
   X.HGEwaldE = sqrt(A.HGEwaldE); 
   X.GGEwaldE = sqrt(A.GGEwaldE);
-
   X.TailE    = sqrt(A.TailE);  
   X.DNN_E    = sqrt(A.DNN_E); 
   return X;
@@ -250,15 +247,12 @@ __host__ MoveEnergy operator *(MoveEnergy A, double B)
   X.HHVDW    = A.HHVDW * B;
   X.HGVDW    = A.HGVDW * B;
   X.GGVDW    = A.GGVDW * B;
-
   X.HHReal   = A.HHReal * B;
   X.HGReal   = A.HGReal * B;
   X.GGReal   = A.GGReal * B;
-
   X.HHEwaldE = A.HHEwaldE * B;
   X.HGEwaldE = A.HGEwaldE * B;
-  X.GGEwaldE = A.GGEwaldE * B;
-
+  X.GGEwaldE = A.HHEwaldE * B;
   X.TailE    = A.TailE * B;
   X.DNN_E    = A.DNN_E * B;
   return X;
@@ -274,15 +268,12 @@ __host__ MoveEnergy operator *(MoveEnergy A, MoveEnergy B)
   X.HHVDW    = A.HHVDW    * B.HHVDW;
   X.HGVDW    = A.HGVDW    * B.HGVDW;
   X.GGVDW    = A.GGVDW    * B.GGVDW;
-
   X.HHReal   = A.HHReal   * B.HHReal;
   X.HGReal   = A.HGReal   * B.HGReal;
   X.GGReal   = A.GGReal   * B.GGReal;
-
   X.HHEwaldE = A.HHEwaldE * B.HHEwaldE;
   X.HGEwaldE = A.HGEwaldE * B.HGEwaldE;
   X.GGEwaldE = A.GGEwaldE * B.GGEwaldE;
-
   X.TailE    = A.TailE    * B.TailE;
   X.DNN_E    = A.DNN_E    * B.DNN_E;
   return X;
@@ -299,15 +290,12 @@ __host__ MoveEnergy operator /(MoveEnergy A, double B)
   X.HHVDW    = A.HHVDW * OneOverB;
   X.HGVDW    = A.HGVDW * OneOverB;
   X.GGVDW    = A.GGVDW * OneOverB;
-
   X.HHReal   = A.HHReal * OneOverB;
   X.HGReal   = A.HGReal * OneOverB;
   X.GGReal   = A.GGReal * OneOverB;
-
   X.HHEwaldE = A.HHEwaldE * OneOverB;
   X.HGEwaldE = A.HGEwaldE * OneOverB;
-  X.GGEwaldE = A.GGEwaldE * OneOverB;
-
+  X.GGEwaldE = A.HHEwaldE * OneOverB;
   X.TailE    = A.TailE * OneOverB;
   X.DNN_E    = A.DNN_E * OneOverB;
   return X;
@@ -324,15 +312,12 @@ __host__ MoveEnergy MoveEnergy_DIVIDE_DOUBLE(MoveEnergy A, double B)
   X.HHVDW    = A.HHVDW * OneOverB;
   X.HGVDW    = A.HGVDW * OneOverB;
   X.GGVDW    = A.GGVDW * OneOverB;
-
   X.HHReal   = A.HHReal * OneOverB;
   X.HGReal   = A.HGReal * OneOverB;
   X.GGReal   = A.GGReal * OneOverB;
-
   X.HHEwaldE = A.HHEwaldE * OneOverB;
   X.HGEwaldE = A.HGEwaldE * OneOverB;
-  X.GGEwaldE = A.GGEwaldE * OneOverB;
-
+  X.GGEwaldE = A.HHEwaldE * OneOverB;
   X.TailE    = A.TailE * OneOverB;
   X.DNN_E    = A.DNN_E * OneOverB;
   return X;
@@ -348,15 +333,12 @@ __host__ MoveEnergy MoveEnergy_Multiply(MoveEnergy A, MoveEnergy B)
   X.HHVDW    = A.HHVDW    * B.HHVDW;
   X.HGVDW    = A.HGVDW    * B.HGVDW;
   X.GGVDW    = A.GGVDW    * B.GGVDW;
-
   X.HHReal   = A.HHReal   * B.HHReal;
   X.HGReal   = A.HGReal   * B.HGReal;
   X.GGReal   = A.GGReal   * B.GGReal;
-
   X.HHEwaldE = A.HHEwaldE * B.HHEwaldE;
   X.HGEwaldE = A.HGEwaldE * B.HGEwaldE;
   X.GGEwaldE = A.GGEwaldE * B.GGEwaldE;
-
   X.TailE    = A.TailE    * B.TailE;
   X.DNN_E    = A.DNN_E    * B.DNN_E;
   return X;
@@ -371,15 +353,12 @@ __host__ void operator +=(MoveEnergy& A, MoveEnergy B)
   A.HHVDW    += B.HHVDW;
   A.HGVDW    += B.HGVDW;
   A.GGVDW    += B.GGVDW;
-
   A.HHReal   += B.HHReal;
   A.HGReal   += B.HGReal;
   A.GGReal   += B.GGReal;
-
   A.HHEwaldE += B.HHEwaldE;
   A.HGEwaldE += B.HGEwaldE;
   A.GGEwaldE += B.GGEwaldE;
-
   A.TailE    += B.TailE;
   A.DNN_E    += B.DNN_E;
 }
@@ -393,15 +372,12 @@ __host__ void operator -=(MoveEnergy& A, MoveEnergy B)
   A.HHVDW    -= B.HHVDW;
   A.HGVDW    -= B.HGVDW;
   A.GGVDW    -= B.GGVDW;
-
   A.HHReal   -= B.HHReal;
   A.HGReal   -= B.HGReal;
   A.GGReal   -= B.GGReal;
-
   A.HHEwaldE -= B.HHEwaldE;
   A.HGEwaldE -= B.HGEwaldE;
   A.GGEwaldE -= B.GGEwaldE;
-
   A.TailE    -= B.TailE;
   A.DNN_E    -= B.DNN_E;
 }

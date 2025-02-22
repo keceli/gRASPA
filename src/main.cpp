@@ -18,7 +18,7 @@
 
 #include <unistd.h>
 
-#include <limits.h>
+// // #include <limits.h>
 
 void printMemoryUsage() 
 {
@@ -55,7 +55,8 @@ void printMemoryUsage()
   file.close();
 }
 
-Variables Initialize(void) //for pybind
+int main(void) //normal cpp
+//Variables main(void) //for pybind
 {
   //Zhao's note: Before everything starts, see if all the lines in Input file can be found in read_data.cpp//
   //An easy way to check if the input file is up-to-date//
@@ -70,16 +71,19 @@ Variables Initialize(void) //for pybind
   //Variable for all important structs// 
   Variables Vars;
 
+  bool RunOneByOne = false;
+  bool RunTogether = true;
+
   // SETUP NUMBER OF SIMULATIONS //
   size_t  NumberOfSimulations = 2;
   size_t  SelectedSim = 0; //Zhao's note: Selected simulation for testing //
   bool    RunSingleSim = false;
   bool    ReadRestart = false; //Whether we read data from restart file or not//
   read_number_of_sims_from_input(&NumberOfSimulations, &RunSingleSim);
-  if(!RunSingleSim)
+  if(RunSingleSim)
   {
-    Vars.RunOneByOne = false;
-    Vars.RunTogether = true;
+    RunOneByOne = true;
+    RunTogether = false;
   }
   ////////////////////////////////////////////////////////////
   // DECLARE BASIC VARIABLES, READ FORCEFIELD and FRAMEWORK //
@@ -272,9 +276,8 @@ Variables Initialize(void) //for pybind
     Prepare_TempSystem_On_Host(Vars.SystemComponents[a].TempSystem);
     cudaMemcpy(Vars.Sims[a].d_a, device_System, sizeof(Atoms)*NComponents.x, cudaMemcpyHostToDevice);
     // SET UP TEMPORARY ARRAYS //
-    Setup_Temporary_Atoms_Structure(Vars.Sims[a].Old,  Vars.SystemComponents[a].HostSystem);
-    Setup_Temporary_Atoms_Structure(Vars.Sims[a].New,  Vars.SystemComponents[a].HostSystem);
-    Setup_Temporary_Atoms_Structure(Vars.Sims[a].Temp, Vars.SystemComponents[a].HostSystem);
+    Setup_Temporary_Atoms_Structure(Vars.Sims[a].Old, Vars.SystemComponents[a].HostSystem);
+    Setup_Temporary_Atoms_Structure(Vars.Sims[a].New, Vars.SystemComponents[a].HostSystem);
 
     if(Vars.SystemComponents[a].UseDNNforHostGuest)
     {
@@ -312,15 +315,11 @@ Variables Initialize(void) //for pybind
     //////////////////////////////////////////////////////////
     // CREATE MOLECULES IN THE BOX BEFORE SIMULAITON STARTS //
     //////////////////////////////////////////////////////////
-    Energy[a].running_energy = CreateMolecule_InOneBox(Vars, a, AlreadyHasFractionalMolecule);
+    Energy[a].running_energy = CreateMolecule_InOneBox(Vars.SystemComponents[a], Vars.Sims[a], Vars.device_FF, Vars.Random, Vars.Widom[a], AlreadyHasFractionalMolecule);
 
     Check_Simulation_Energy(Vars.Box[a], Vars.SystemComponents[a].HostSystem, Vars.FF, Vars.device_FF, Vars.SystemComponents[a], CREATEMOL, a, Vars.Sims[a], true);
   }
-  return Vars;
-}
 
-void RunSimulation(Variables& Vars)
-{
   printf("============================================\n");
   printf("== END OF PREPARATION, SIMULATION STARTS! ==\n");
   printf("============================================\n");
@@ -328,113 +327,101 @@ void RunSimulation(Variables& Vars)
   ////////////////
   // RUN CYCLES //
   ////////////////
-  double start = omp_get_wtime();
-
-  size_t NumberOfSimulations = Vars.SystemComponents.size();
+  double start = omp_get_wtime(); 
 
   ///////////////////////////
   // INITIALIZATION CYCLES //
   ///////////////////////////
-  Vars.SimulationMode = INITIALIZATION;
-  if(Vars.RunOneByOne)
+  if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
-      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f [Pa], temp: %.5f [K]\n", i, Vars.SystemComponents[i].Pressure_Pa, Vars.SystemComponents[i].Temperature);
-      Run_Simulation_ForOneBox(Vars, i);
+      if(i > 0 && RunSingleSim) continue; 
+      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
+      Vars.SimulationMode = INITIALIZATION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
-  else if(Vars.RunTogether)
+  else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars);
+    Run_Simulation_MultipleBoxes(Vars, INITIALIZATION);
   }
   //////////////////////////
   // EQUILIBRATION CYCLES //
   //////////////////////////
-  Vars.SimulationMode = EQUILIBRATION;
-  if(Vars.RunOneByOne)
+  if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
-      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f [Pa], temp: %.5f [K]\n", i, Vars.SystemComponents[i].Pressure_Pa, Vars.SystemComponents[i].Temperature);
-      Run_Simulation_ForOneBox(Vars, i);
+      if(i > 0 && RunSingleSim) continue;
+      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
+      Vars.SimulationMode = EQUILIBRATION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
-  else if(Vars.RunTogether)
+  else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars);
+    Run_Simulation_MultipleBoxes(Vars, EQUILIBRATION);
   }
-
+  
   ///////////////////////
   // PRODUCTION CYCLES //
   ///////////////////////
-  Vars.SimulationMode = PRODUCTION;
-  if(Vars.RunOneByOne)
+  if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
-      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f [Pa], temp: %.5f [K]\n", i, Vars.SystemComponents[i].Pressure_Pa, Vars.SystemComponents[i].Temperature);
-      Run_Simulation_ForOneBox(Vars, i);
+      if(i > 0 && RunSingleSim) continue;
+      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
+      Vars.SimulationMode = PRODUCTION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
-  else if(Vars.RunTogether)
+  else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars);
+    Run_Simulation_MultipleBoxes(Vars, PRODUCTION);
   }
 
-  double end = omp_get_wtime();
-  for(size_t i = 0; i < NumberOfSimulations; i++)
-    fprintf(Vars.SystemComponents[i].OUTPUT, "Work took %f seconds\n", end - start);
-}
-
-void EndOfSimulationWrapUp(Variables& Vars)
-{
   printf("========================\n");
   printf("== END OF SIMULATION! ==\n");
   printf("========================\n");
-
-  size_t NumberOfSimulations = Vars.SystemComponents.size();
-  
+ 
+  double end = omp_get_wtime();
   ///////////////////////////////////
   // PRINT FINAL ENERGIES AND TIME //
   ///////////////////////////////////
+
   // CALCULATE THE FINAL ENERGY //
   for(size_t i = 0; i < NumberOfSimulations; i++)
-  {
+  { 
+    fprintf(Vars.SystemComponents[i].OUTPUT, "Work took %f seconds\n", end - start);
+    if(RunSingleSim){if(i != SelectedSim) continue;}
     check_energy_wrapper(Vars, i);
     //Report Random Number Summary and DNN statistics//
     fprintf(Vars.SystemComponents[i].OUTPUT, "Random Numbers Regenerated %zu times, offset: %zu, randomsize: %zu\n", Vars.Random.Rounds, Vars.Random.offset, Vars.Random.randomsize);
-  
+
     fprintf(Vars.SystemComponents[i].OUTPUT, "DNN Feature Preparation Time: %.5f, DNN Prediction Time: %.5f\n", Vars.SystemComponents[0].DNNFeatureTime, Vars.SystemComponents[0].DNNPredictTime);
     fprintf(Vars.SystemComponents[i].OUTPUT, "DNN GPU Time: %.5f, ", Vars.SystemComponents[i].DNNGPUTime);
     fprintf(Vars.SystemComponents[i].OUTPUT, "DNN Sort Time: %.5f, ", Vars.SystemComponents[0].DNNSortTime);
     fprintf(Vars.SystemComponents[i].OUTPUT, "std::sort Time: %.5f, ", Vars.SystemComponents[0].DNNstdsortTime); 
     fprintf(Vars.SystemComponents[i].OUTPUT, "Featurization Time: %.5f\n", Vars.SystemComponents[0].DNNFeaturizationTime);
-  } 
+  }
   /////////////////////////////////////////////////////////
   // Check if the Ewald Diff and running Diff make sense //
   /////////////////////////////////////////////////////////
-  ENERGY_SUMMARY(Vars);
-    
+  ENERGY_SUMMARY(Vars.SystemComponents, Vars.Constants);
+
   GenerateSummaryAtEnd(0, Vars.SystemComponents, Vars.Sims, Vars.FF, Vars.Box);
   //Check CPU mem used//
   printMemoryUsage();
   /*
   if(Vars.SystemComponents[a].UseDNNforHostGuest)
-  { 
+  {
     Free_DNN_Model(Vars.SystemComponents[0]);
-  } 
+  }
   */
 
   for(size_t i = 0; i < Vars.SystemComponents.size(); i++)
     if(Vars.SystemComponents[i].OUTPUT != stderr)
       fclose(Vars.SystemComponents[i].OUTPUT);
-}
 
-int main(void) //normal cpp
-{
-  Variables V = Initialize();
-  RunSimulation(V);
-  EndOfSimulationWrapUp(V);
   return 0;  //normal cpp
+  //return Vars; //for pybind
 }

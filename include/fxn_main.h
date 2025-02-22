@@ -155,17 +155,6 @@ inline void Prepare_Widom(WidomStruct& Widom, Boxsize Box, Simulations& Sims, Co
 {
   //Zhao's note: NumberWidomTrials is for first bead. NumberWidomTrialsOrientations is for the rest, here we consider single component, not mixture //
 
-  size_t MaxTrial = max(Widom.NumberWidomTrials, Widom.NumberWidomTrialsOrientations);
-  SystemComponents.CBMC_New.resize(1);
-  SystemComponents.CBMC_Old.resize(1);
-  SystemComponents.Rosen.reserve(MaxTrial);
-  SystemComponents.ExpRosen.reserve(MaxTrial);
-  SystemComponents.ShiftedBoltzmannFactors.reserve(MaxTrial);
-  SystemComponents.Trialindex.reserve(MaxTrial);
-  SystemComponents.TrialEnergies.reserve(MaxTrial);
-
-  printf("Rosen capacity: %zu\n", SystemComponents.Rosen.capacity());
-
   size_t MaxTrialsize = max(Widom.NumberWidomTrials, Widom.NumberWidomTrialsOrientations*(SystemComponents.Moleculesize[1]-1));
 
   //Zhao's note: The previous way yields a size for blocksum that can be smaller than the number of kpoints
@@ -195,7 +184,6 @@ inline void Prepare_Widom(WidomStruct& Widom, Boxsize Box, Simulations& Sims, Co
   printf("Allocated %zu double3 for reinsertion!\n", MaxAdsorbateMolsize * 2);
 
   cudaMallocHost(&Sims.Blocksum, blocksum_size*sizeof(double));
-  SystemComponents.host_array = (double*) malloc(blocksum_size*sizeof(double));
 
   cudaMallocManaged(&Sims.ExcludeList,        10 * sizeof(int2));
   for(size_t i = 0; i < 10; i++) Sims.ExcludeList[i] = {-1, -1}; //Initialize with negative # so that nothing is ignored//
@@ -329,12 +317,8 @@ inline void Check_Simulation_Energy(Boxsize& Box, Atoms* System, ForceField FF, 
   ENERGY.TailE     = TotalTailCorrection(SystemComponents, FF.size, Sim.Box.Volume);
 
   //This energy uses GPU, but lets copy it as well, no need to compute 2times//
-  if(SystemComponents.UseDNNforHostGuest) 
-  {
-    ENERGY.DNN_E     = DNN_Prediction_Total(SystemComponents, Sim);
-    ENERGY.DNN_Replace_Energy();
-    double Correction = ENERGY.DNN_Correction();
-  }
+  if(SystemComponents.UseDNNforHostGuest) ENERGY.DNN_E     = DNN_Prediction_Total(SystemComponents, Sim);
+  if(SystemComponents.UseDNNforHostGuest) double Correction = ENERGY.DNN_Correction();
  
   if(SIMULATIONSTAGE == INITIAL) SystemComponents.Initial_Energy = ENERGY;
   else if(SIMULATIONSTAGE == CREATEMOL)
@@ -377,13 +361,8 @@ inline void Check_Simulation_Energy(Boxsize& Box, Atoms* System, ForceField FF, 
       fprintf(SystemComponents.OUTPUT, "Ewald Summation (total energy) on the GPU took %.5f secs\n", GPUEwaldTime);
     }
     GPU_Energy.TailE = TotalTailCorrection(SystemComponents, FF.size, Sim.Box.Volume);
-
-    if(SystemComponents.UseDNNforHostGuest)
-    {
-      GPU_Energy.DNN_E = ENERGY.DNN_E;
-      GPU_Energy.DNN_Replace_Energy();
-      double GPU_Correction = GPU_Energy.DNN_Correction();
-    }
+    if(SystemComponents.UseDNNforHostGuest) GPU_Energy.DNN_E = ENERGY.DNN_E;
+    if(SystemComponents.UseDNNforHostGuest) double GPU_Correction = GPU_Energy.DNN_Correction();
 
     fprintf(SystemComponents.OUTPUT, "Total GPU Energy: \n"); GPU_Energy.print();
     if(SIMULATIONSTAGE == FINAL) SystemComponents.GPU_Energy = GPU_Energy;
@@ -455,7 +434,7 @@ inline void PRINT_ENERGY_AT_STAGE(Components& SystemComponents, int stage, Units
     case DELTA_CHECK: {stage_name = "CHECK DELTA_E (RUNNING FINAL - CREATE MOLECULE)"; E = SystemComponents.Final_Energy - SystemComponents.CreateMol_Energy; break;}
     case DRIFT: {stage_name = "ENERGY DRIFT (CPU FINAL - RUNNING FINAL)"; E = SystemComponents.CreateMol_Energy + SystemComponents.deltaE - SystemComponents.Final_Energy; break;}
     case GPU_DRIFT: {stage_name = "GPU DRIFT (GPU FINAL - CPU FINAL)"; E = SystemComponents.Final_Energy - SystemComponents.GPU_Energy; break;}
-    case AVERAGE: {stage_name = "PRODUCTION PHASE AVERAGE ENERGY"; E = SystemComponents.AverageEnergy + SystemComponents.Initial_Energy;break;}
+    case AVERAGE: {stage_name = "PRODUCTION PHASE AVERAGE ENERGY"; E = SystemComponents.AverageEnergy;break;}
     case AVERAGE_ERR: {stage_name = "PRODUCTION PHASE AVERAGE ENERGY ERRORBAR"; E = SystemComponents.AverageEnergy_Errorbar; break;}
   }
   fprintf(SystemComponents.OUTPUT, " *** %s *** \n", stage_name.c_str());
@@ -491,10 +470,8 @@ inline void PRINT_ENERGY_AT_STAGE(Components& SystemComponents, int stage, Units
   fprintf(SystemComponents.OUTPUT, "Total Energy:               %.5f (%.5f [K])\n", E.total(), E.total() * Constants.energy_to_kelvin);
   fprintf(SystemComponents.OUTPUT, "========================================================================\n");
 }
-void ENERGY_SUMMARY(Variables& Vars)
+inline void ENERGY_SUMMARY(std::vector<Components>& SystemComponents, Units& Constants)
 {
-  std::vector<Components>& SystemComponents = Vars.SystemComponents;
-  Units& Constants = Vars.Constants;
   size_t NumberOfSimulations = SystemComponents.size();
   for(size_t i = 0; i < NumberOfSimulations; i++)
   {
