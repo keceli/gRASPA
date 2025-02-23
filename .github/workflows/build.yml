@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: 
+      image: nvcr.io/nvidia/nvhpc:23.11-devel-cuda12.2-ubuntu22.04
+      options: --user root
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y cmake build-essential
+
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake ..
+
+    - name: Build
+      working-directory: build
+      run: cmake --build .
+
+    - name: List build artifacts
+      working-directory: build
+      run: ls -la 
