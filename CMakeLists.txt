@@ -1,15 +1,23 @@
 cmake_minimum_required(VERSION 3.18)
-project(nvc_main LANGUAGES CXX)
-
 # Use nvc++ as the compiler.
 set(CMAKE_CXX_COMPILER "nvc++")
+
+project(nvc_main LANGUAGES CXX)
+
+# Add option for building tests (OFF by default)
+option(BUILD_TESTING "Build the testing tree." OFF)
+
 
 # Require C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Add the include directory.
-include_directories(${CMAKE_SOURCE_DIR}/include)
+# Define include directories
+set(PROJECT_INCLUDE_DIRS
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
+)
+include_directories(${PROJECT_INCLUDE_DIRS})
 
 # Define your custom compile flags as individual list items.
 set(NVCFLAG_LIST
@@ -68,3 +76,12 @@ target_link_options(nvc_main.x PRIVATE -cuda)
 # For GCC 7 and similar compilers that only support std::experimental::filesystem,
 # explicitly link the filesystem library.
 target_link_libraries(nvc_main.x PRIVATE stdc++fs)
+
+# Only build tests if BUILD_TESTING is ON
+if(BUILD_TESTING)
+    # Enable testing
+    enable_testing()
+
+    # Add the tests subdirectory
+    add_subdirectory(tests)
+endif()
